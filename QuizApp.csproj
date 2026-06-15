@@ -24,11 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- These files are copied next to the .exe on publish -->
-    <None Update="questions.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
+    <!-- Embed questions.json as a compiled resource inside the .exe — not visible to users -->
+    <EmbeddedResource Include="questions.json" />
+
+    <!-- App.config still copied alongside .exe for easy path/title config -->
     <None Update="App.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

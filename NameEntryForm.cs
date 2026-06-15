@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Drawing;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 
@@ -13,7 +14,6 @@ namespace QuizApp
         // ── config ─────────────────────────────────────────────────────
         private string _quizTitle;
         private string _scoreFilePath;
-        private string _questionsFilePath;
 
         // ── controls ───────────────────────────────────────────────────
         private Panel    pnlHeader;
@@ -30,9 +30,8 @@ namespace QuizApp
 
         public NameEntryForm()
         {
-            _quizTitle         = ConfigurationManager.AppSettings["QuizTitle"]         ?? "Monthly Quiz";
-            _scoreFilePath     = ConfigurationManager.AppSettings["ScoreFilePath"]     ?? "QuizScores.xlsx";
-            _questionsFilePath = ConfigurationManager.AppSettings["QuestionsFilePath"] ?? "questions.json";
+            _quizTitle     = ConfigurationManager.AppSettings["QuizTitle"]     ?? "Monthly Quiz";
+            _scoreFilePath = ConfigurationManager.AppSettings["ScoreFilePath"] ?? "QuizScores.xlsx";
 
             BuildUI();
         }
@@ -208,21 +207,22 @@ namespace QuizApp
             List<Question> questions;
             try
             {
-                string path = Path.IsPathRooted(_questionsFilePath)
-                    ? _questionsFilePath
-                    : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _questionsFilePath);
-
-                if (!File.Exists(path))
+                // Load questions from embedded resource (not visible on disk)
+                var assembly     = Assembly.GetExecutingAssembly();
+                var resourceName = "QuizApp.questions.json";
+                using var stream = assembly.GetManifestResourceStream(resourceName);
+                if (stream == null)
                 {
-                    ShowError($"questions.json not found at: {path}");
+                    ShowError("Questions resource not found. Please rebuild the application.");
                     return;
                 }
-
-                questions = JsonConvert.DeserializeObject<List<Question>>(File.ReadAllText(path));
+                using var reader = new StreamReader(stream);
+                string json      = reader.ReadToEnd();
+                questions        = JsonConvert.DeserializeObject<List<Question>>(json);
 
                 if (questions == null || questions.Count == 0)
                 {
-                    ShowError("No questions found in questions.json.");
+                    ShowError("No questions found. Please rebuild the application.");
                     return;
                 }
             }
