@@ -14,9 +14,10 @@ namespace QuizApp
         private readonly string         _quizTitle;
         private readonly bool           _excelOk;
         private readonly string         _excelErr;
+        private readonly int            _timeTaken;
 
         public ResultForm(List<Question> questions, int[] userAnswers, string fullName,
-                          int score, string quizTitle, bool excelOk, string excelErr)
+                          int score, string quizTitle, bool excelOk, string excelErr, int timeTaken)
         {
             _questions   = questions;
             _userAnswers = userAnswers;
@@ -25,7 +26,7 @@ namespace QuizApp
             _quizTitle   = quizTitle;
             _excelOk     = excelOk;
             _excelErr    = excelErr;
-
+            _timeTaken   = timeTaken;
             BuildUI();
         }
 
@@ -34,23 +35,29 @@ namespace QuizApp
             int    total = _questions.Count;
             double pct   = total > 0 ? (double)_score / total * 100 : 0;
 
+            // ── Form ───────────────────────────────────────────────────
             Text            = "Results — " + _quizTitle;
-            Size            = new Size(700, 680);
-            MinimumSize     = new Size(700, 680);
-            MaximumSize     = new Size(700, 680);
+            Size            = new Size(700, 700);
+            MinimumSize     = new Size(700, 700);
+            MaximumSize     = new Size(700, 700);
             StartPosition   = FormStartPosition.CenterScreen;
             BackColor       = Color.FromArgb(245, 247, 250);
             Font            = new Font("Segoe UI", 9.5f);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox     = false;
 
-            // ── SCORE HEADER ───────────────────────────────────────────
-            Color headerColor = pct >= 80
-                ? Color.FromArgb(30, 120, 70)
-                : pct >= 60
-                    ? Color.FromArgb(160, 100, 20)
-                    : Color.FromArgb(180, 40, 40);
+            Color headerColor = pct >= 80 ? Color.FromArgb(30, 120, 70)
+                              : pct >= 60 ? Color.FromArgb(160, 100, 20)
+                                          : Color.FromArgb(180, 40, 40);
 
+            string grade = pct >= 80 ? "Excellent  🏆"
+                         : pct >= 60 ? "Good  👍"
+                         : pct >= 40 ? "Average"
+                                     : "Needs Improvement";
+
+            // ══════════════════════════════════════════════════════════
+            // 1. HEADER  (Dock = Top, 160 px)
+            // ══════════════════════════════════════════════════════════
             var pnlHeader = new Panel
             {
                 Dock      = DockStyle.Top,
@@ -58,111 +65,142 @@ namespace QuizApp
                 BackColor = headerColor
             };
 
+            // Left column — title, name, grade, excel status
             var lblDone = new Label
             {
                 Text      = "Quiz Complete!",
                 ForeColor = Color.White,
                 Font      = new Font("Segoe UI", 16f, FontStyle.Bold),
-                AutoSize  = false,
-                Size      = new Size(380, 38),
-                Location  = new Point(24, 20),
+                Location  = new Point(20, 18),
+                Size      = new Size(390, 34),
                 TextAlign = ContentAlignment.MiddleLeft
             };
-
             var lblName = new Label
             {
                 Text      = "👤  " + _fullName,
                 ForeColor = Color.FromArgb(210, 240, 210),
                 Font      = new Font("Segoe UI", 9.5f),
-                AutoSize  = false,
-                Size      = new Size(380, 24),
-                Location  = new Point(26, 62),
+                Location  = new Point(22, 56),
+                Size      = new Size(390, 22),
                 TextAlign = ContentAlignment.MiddleLeft
             };
-
-            string grade = pct >= 80 ? "Excellent 🏆"
-                         : pct >= 60 ? "Good 👍"
-                         : pct >= 40 ? "Average"
-                         : "Needs Improvement";
-
+            string timeDisplay = ExcelScoreWriter.FormatTime(_timeTaken);
             var lblGrade = new Label
             {
-                Text      = grade,
+                Text      = "⏱  " + timeDisplay + " to complete",
                 ForeColor = Color.White,
                 Font      = new Font("Segoe UI", 11f, FontStyle.Bold),
-                AutoSize  = false,
-                Size      = new Size(380, 26),
-                Location  = new Point(26, 90),
+                Location  = new Point(22, 82),
+                Size      = new Size(390, 24),
                 TextAlign = ContentAlignment.MiddleLeft
             };
-
             var lblExcel = new Label
             {
-                Text      = _excelOk ? "✔  Score saved to shared drive." : "⚠  Could not save: " + _excelErr,
+                Text      = _excelOk
+                            ? "✔  Score saved to shared drive."
+                            : "⚠  Could not save score: " + _excelErr,
                 ForeColor = _excelOk ? Color.FromArgb(180, 255, 180) : Color.Yellow,
                 Font      = new Font("Segoe UI", 8.5f),
-                AutoSize  = false,
-                Size      = new Size(500, 22),
-                Location  = new Point(26, 128),
+                Location  = new Point(22, 122),
+                Size      = new Size(490, 22),
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            // Score box on the right
-            var pnlScore = new Panel
+            // Right column — score box
+            var pnlScoreBox = new Panel
             {
-                Location  = new Point(510, 20),
-                Size      = new Size(160, 118),
-                BackColor = Color.FromArgb(0, 0, 0, 50)
+                Location  = new Point(516, 16),
+                Size      = new Size(152, 126),
+                BackColor = Color.FromArgb(0, 0, 0, 40)
             };
-
             var lblScoreNum = new Label
             {
-                Text      = $"{_score}/{total}",
+                Text      = $"{_score} / {total}",
                 ForeColor = Color.White,
-                Font      = new Font("Segoe UI", 30f, FontStyle.Bold),
-                AutoSize  = false,
-                Size      = new Size(160, 60),
-                Location  = new Point(0, 10),
+                Font      = new Font("Segoe UI", 26f, FontStyle.Bold),
+                Location  = new Point(0, 14),
+                Size      = new Size(152, 54),
                 TextAlign = ContentAlignment.MiddleCenter
             };
-
             var lblPct = new Label
             {
                 Text      = $"{pct:F1}%",
-                ForeColor = Color.FromArgb(220, 255, 220),
+                ForeColor = Color.FromArgb(210, 255, 210),
                 Font      = new Font("Segoe UI", 13f, FontStyle.Bold),
-                AutoSize  = false,
-                Size      = new Size(160, 32),
-                Location  = new Point(0, 68),
+                Location  = new Point(0, 70),
+                Size      = new Size(152, 30),
                 TextAlign = ContentAlignment.MiddleCenter
             };
+            pnlScoreBox.Controls.AddRange(new Control[] { lblScoreNum, lblPct });
 
-            pnlScore.Controls.AddRange(new Control[] { lblScoreNum, lblPct });
             pnlHeader.Controls.AddRange(new Control[]
-                { lblDone, lblName, lblGrade, lblExcel, pnlScore });
+                { lblDone, lblName, lblGrade, lblExcel, pnlScoreBox });
 
-            // ── REVIEW HEADER ──────────────────────────────────────────
-            var pnlRevHdr = new Panel
+            // ══════════════════════════════════════════════════════════
+            // 2. FOOTER  (Dock = Bottom, 64 px)  — added BEFORE scroll
+            //    so DockStyle layering works correctly
+            // ══════════════════════════════════════════════════════════
+            var pnlFooter = new Panel
             {
-                Location  = new Point(0, 160),
-                Size      = new Size(700, 36),
-                BackColor = Color.FromArgb(235, 240, 248)
+                Dock      = DockStyle.Bottom,
+                Height    = 64,
+                BackColor = Color.White
             };
-            pnlRevHdr.Paint += (s, e) =>
+            pnlFooter.Paint += (s, e) =>
             {
-                using var p = new System.Drawing.Pen(Color.FromArgb(200, 210, 225), 1);
-                e.Graphics.DrawLine(p, 0, pnlRevHdr.Height - 1, pnlRevHdr.Width, pnlRevHdr.Height - 1);
+                using var p = new System.Drawing.Pen(Color.FromArgb(200, 212, 228), 1);
+                e.Graphics.DrawLine(p, 0, 0, pnlFooter.Width, 0);
             };
 
+            var btnClose = new Button
+            {
+                Text      = "Close",
+                Size      = new Size(150, 40),
+                Font      = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+                BackColor = Color.FromArgb(41, 98, 172),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor    = Cursors.Hand
+            };
+            btnClose.FlatAppearance.BorderSize            = 0;
+            btnClose.FlatAppearance.MouseOverBackColor    = Color.FromArgb(30, 78, 140);
+            btnClose.Click += (s, e) => Application.Exit();
+
+            // Centre the button inside the footer
+            pnlFooter.Controls.Add(btnClose);
+            pnlFooter.Layout += (s, e) =>
+            {
+                btnClose.Location = new Point(
+                    (pnlFooter.ClientSize.Width  - btnClose.Width)  / 2,
+                    (pnlFooter.ClientSize.Height - btnClose.Height) / 2);
+            };
+
+            // ══════════════════════════════════════════════════════════
+            // 3. SECTION HEADER  (Dock = Top, 36 px)
+            // ══════════════════════════════════════════════════════════
             int wrongCount = 0;
             for (int i = 0; i < _questions.Count; i++)
                 if (_userAnswers[i] != _questions[i].CorrectAnswerIndex) wrongCount++;
 
+            var pnlRevHdr = new Panel
+            {
+                Dock      = DockStyle.Top,
+                Height    = 36,
+                BackColor = Color.FromArgb(232, 240, 252)
+            };
+            pnlRevHdr.Paint += (s, e) =>
+            {
+                using var p = new System.Drawing.Pen(Color.FromArgb(200, 212, 228), 1);
+                e.Graphics.DrawLine(p, 0, pnlRevHdr.Height - 1, pnlRevHdr.Width, pnlRevHdr.Height - 1);
+            };
+
+            string revTitle = wrongCount == 0
+                ? "  ✔  Perfect score — all answers correct!"
+                : $"  📋  Answer Review  —  {wrongCount} incorrect answer{(wrongCount > 1 ? "s" : "")}";
+
             var lblRevTitle = new Label
             {
-                Text      = wrongCount == 0
-                            ? "  ✔  All answers correct!"
-                            : $"  📋  Answer Review  —  {wrongCount} incorrect answer{(wrongCount > 1 ? "s" : "")}",
+                Text      = revTitle,
                 ForeColor = Color.FromArgb(41, 98, 172),
                 Font      = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 Dock      = DockStyle.Fill,
@@ -170,122 +208,139 @@ namespace QuizApp
             };
             pnlRevHdr.Controls.Add(lblRevTitle);
 
-            // ── SCROLLABLE REVIEW LIST ─────────────────────────────────
+            // ══════════════════════════════════════════════════════════
+            // 4. SCROLL AREA  (Dock = Fill — takes remaining space)
+            // ══════════════════════════════════════════════════════════
             var scroll = new Panel
             {
-                Location   = new Point(0, 196),
-                Size       = new Size(700, 430),
+                Dock       = DockStyle.Fill,
                 AutoScroll = true,
-                BackColor  = Color.FromArgb(245, 247, 250)
+                BackColor  = Color.FromArgb(245, 247, 250),
+                Padding    = new Padding(14, 8, 14, 8)
             };
 
             int y = 8;
             for (int i = 0; i < _questions.Count; i++)
             {
-                bool correct = _userAnswers[i] == _questions[i].CorrectAnswerIndex;
-                int  rowH    = correct ? 56 : 100;
+                bool   correct = _userAnswers[i] == _questions[i].CorrectAnswerIndex;
+                string[] L     = { "A", "B", "C", "D" };
+
+                // Build row content
+                string questionText = _questions[i].QuestionText;
+                string yourAns      = !correct && _userAnswers[i] >= 0
+                    ? $"{L[_userAnswers[i]]})  {_questions[i].Options[_userAnswers[i]]}"
+                    : "No answer selected";
+                string correctAns   = $"{L[_questions[i].CorrectAnswerIndex]})  {_questions[i].Options[_questions[i].CorrectAnswerIndex]}";
+
+                // Row height: correct = 54, wrong = 96
+                int rowH = correct ? 54 : 96;
 
                 var row = new Panel
                 {
-                    Location  = new Point(14, y),
-                    Size      = new Size(656, rowH),
+                    Location  = new Point(0, y),
+                    Size      = new Size(646, rowH),
                     BackColor = correct
-                                ? Color.FromArgb(235, 250, 240)
-                                : Color.FromArgb(255, 240, 240)
+                                ? Color.FromArgb(232, 248, 238)
+                                : Color.FromArgb(255, 238, 238)
                 };
+
+                // Capture loop variable for Paint closure
+                bool rowCorrect = correct;
                 row.Paint += (s, e) =>
                 {
                     using var pen = new System.Drawing.Pen(
-                        correct ? Color.FromArgb(180, 220, 190) : Color.FromArgb(220, 180, 180), 1);
+                        rowCorrect ? Color.FromArgb(160, 215, 175) : Color.FromArgb(215, 175, 175), 1);
                     e.Graphics.DrawRectangle(pen, 0, 0, row.Width - 1, row.Height - 1);
                 };
 
-                // Status icon
+                // ── Icon ────────────────────────────────────────────────
                 var lblIcon = new Label
                 {
                     Text      = correct ? "✔" : "✖",
-                    ForeColor = correct ? Color.FromArgb(30, 140, 70) : Color.FromArgb(190, 40, 40),
-                    Font      = new Font("Segoe UI", 14f, FontStyle.Bold),
-                    Location  = new Point(10, 0),
-                    Size      = new Size(32, rowH),
+                    ForeColor = correct ? Color.FromArgb(25, 130, 65) : Color.FromArgb(185, 38, 38),
+                    Font      = new Font("Segoe UI", 13f, FontStyle.Bold),
+                    Location  = new Point(8, 0),
+                    Size      = new Size(30, rowH),
                     TextAlign = ContentAlignment.MiddleCenter
                 };
 
-                // Q number
+                // ── Q number ────────────────────────────────────────────
                 var lblQN = new Label
                 {
                     Text      = $"Q{i + 1}",
-                    ForeColor = correct ? Color.FromArgb(30, 140, 70) : Color.FromArgb(190, 40, 40),
+                    ForeColor = correct ? Color.FromArgb(25, 130, 65) : Color.FromArgb(185, 38, 38),
                     Font      = new Font("Segoe UI", 8f, FontStyle.Bold),
-                    Location  = new Point(46, 8),
-                    Size      = new Size(36, 16)
+                    Location  = new Point(44, 8),
+                    Size      = new Size(38, 16),
+                    TextAlign = ContentAlignment.MiddleLeft
                 };
 
-                // Question text
+                // ── Question text ────────────────────────────────────────
                 var lblQ = new Label
                 {
-                    Text      = _questions[i].QuestionText,
-                    ForeColor = Color.FromArgb(30, 30, 30),
+                    Text      = questionText,
+                    ForeColor = Color.FromArgb(25, 25, 25),
                     Font      = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-                    Location  = new Point(46, 24),
-                    Size      = new Size(596, correct ? 26 : 22)
+                    Location  = new Point(44, 26),
+                    Size      = new Size(592, correct ? 22 : 20),
+                    TextAlign = ContentAlignment.MiddleLeft
                 };
 
                 row.Controls.AddRange(new Control[] { lblIcon, lblQN, lblQ });
 
                 if (!correct)
                 {
-                    string[] L = { "A", "B", "C", "D" };
-                    string ua  = _userAnswers[i] >= 0
-                        ? $"{L[_userAnswers[i]]})  {_questions[i].Options[_userAnswers[i]]}"
-                        : "No answer selected";
-                    string ca  = $"{L[_questions[i].CorrectAnswerIndex]})  {_questions[i].Options[_questions[i].CorrectAnswerIndex]}";
-
+                    var lblYourLbl = new Label
+                    {
+                        Text      = "Your answer:",
+                        ForeColor = Color.FromArgb(140, 60, 60),
+                        Font      = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                        Location  = new Point(44, 50),
+                        Size      = new Size(110, 18),
+                        TextAlign = ContentAlignment.MiddleLeft
+                    };
                     var lblYA = new Label
                     {
-                        Text      = "Your answer:      " + ua,
-                        ForeColor = Color.FromArgb(180, 50, 50),
-                        Font      = new Font("Segoe UI", 9f),
-                        Location  = new Point(46, 50),
-                        Size      = new Size(600, 20)
+                        Text      = yourAns,
+                        ForeColor = Color.FromArgb(180, 45, 45),
+                        Font      = new Font("Segoe UI", 8.5f),
+                        Location  = new Point(158, 50),
+                        Size      = new Size(478, 18),
+                        TextAlign = ContentAlignment.MiddleLeft
                     };
-
+                    var lblCorrLbl = new Label
+                    {
+                        Text      = "Correct answer:",
+                        ForeColor = Color.FromArgb(20, 100, 50),
+                        Font      = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                        Location  = new Point(44, 72),
+                        Size      = new Size(110, 18),
+                        TextAlign = ContentAlignment.MiddleLeft
+                    };
                     var lblCA = new Label
                     {
-                        Text      = "Correct answer:  " + ca,
-                        ForeColor = Color.FromArgb(25, 120, 60),
-                        Font      = new Font("Segoe UI", 9f, FontStyle.Bold),
-                        Location  = new Point(46, 72),
-                        Size      = new Size(600, 20)
+                        Text      = correctAns,
+                        ForeColor = Color.FromArgb(20, 110, 55),
+                        Font      = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                        Location  = new Point(158, 72),
+                        Size      = new Size(478, 18),
+                        TextAlign = ContentAlignment.MiddleLeft
                     };
-
-                    row.Controls.AddRange(new Control[] { lblYA, lblCA });
+                    row.Controls.AddRange(new Control[] { lblYourLbl, lblYA, lblCorrLbl, lblCA });
                 }
 
                 scroll.Controls.Add(row);
                 y += rowH + 6;
             }
 
-            // ── CLOSE BUTTON ───────────────────────────────────────────
-            var btnClose = new Button
-            {
-                Text      = "Close",
-                Size      = new Size(130, 40),
-                Location  = new Point(284, 628),
-                Font      = new Font("Segoe UI", 10.5f, FontStyle.Bold),
-                BackColor = Color.FromArgb(41, 98, 172),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor    = Cursors.Hand
-            };
-            btnClose.FlatAppearance.BorderSize = 0;
-            btnClose.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 78, 140);
-            btnClose.Click += (s, e) => Application.Exit();
-
-            Controls.Add(pnlHeader);
-            Controls.Add(pnlRevHdr);
-            Controls.Add(scroll);
-            Controls.Add(btnClose);
+            // ══════════════════════════════════════════════════════════
+            // Add controls in correct dock order:
+            //   Top elements first (header, revHdr), then Bottom, then Fill
+            // ══════════════════════════════════════════════════════════
+            Controls.Add(scroll);       // Fill  — added first so it goes behind
+            Controls.Add(pnlFooter);    // Bottom
+            Controls.Add(pnlRevHdr);    // Top (second, so below header)
+            Controls.Add(pnlHeader);    // Top (added last = topmost)
         }
     }
 }

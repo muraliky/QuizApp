@@ -21,7 +21,8 @@ namespace QuizApp
         private readonly List<Question> _questions;
         private readonly string         _fullName, _quizTitle, _scoreFilePath;
         private readonly int[]          _userAnswers;
-        private int _current = 0;
+        private int      _current   = 0;
+        private DateTime  _startTime;
 
         // ── controls ───────────────────────────────────────────────────
         private Panel       pnlHeader;
@@ -53,6 +54,7 @@ namespace QuizApp
             _userAnswers   = new int[questions.Count];
             for (int i = 0; i < _userAnswers.Length; i++) _userAnswers[i] = -1;
 
+            _startTime = DateTime.Now;
             BuildUI();
             LoadQuestion(0);
         }
@@ -459,14 +461,16 @@ namespace QuizApp
             string err = "";
             try
             {
+                int timeTaken = (int)(DateTime.Now - _startTime).TotalSeconds;
                 ExcelScoreWriter.WriteScore(_scoreFilePath, _fullName, score,
-                                            _questions.Count, DateTime.Now);
+                                            _questions.Count, DateTime.Now, timeTaken);
                 ok = true;
             }
             catch (Exception ex) { err = ex.Message; }
 
+            int elapsed = (int)(DateTime.Now - _startTime).TotalSeconds;
             var rf = new ResultForm(_questions, _userAnswers, _fullName, score,
-                                    _quizTitle, ok, err);
+                                    _quizTitle, ok, err, elapsed);
             rf.FormClosed += (s, e) => Application.Exit();
             rf.Show();
             Hide();
