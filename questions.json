@@ -1,0 +1,102 @@
+[
+  {
+    "QuestionText": "What does UAT stand for in software testing?",
+    "Options": [
+      "Unit Acceptance Testing",
+      "User Acceptance Testing",
+      "Universal Application Testing",
+      "Unified Automation Testing"
+    ],
+    "CorrectAnswerIndex": 1
+  },
+  {
+    "QuestionText": "Which of the following is NOT a type of software testing?",
+    "Options": [
+      "Regression Testing",
+      "Smoke Testing",
+      "Compilation Testing",
+      "Sanity Testing"
+    ],
+    "CorrectAnswerIndex": 2
+  },
+  {
+    "QuestionText": "What is the primary purpose of a test case?",
+    "Options": [
+      "To find as many bugs as possible",
+      "To document the testing process",
+      "To verify that a specific functionality works as expected",
+      "To automate the testing workflow"
+    ],
+    "CorrectAnswerIndex": 2
+  },
+  {
+    "QuestionText": "In BDD (Behavior Driven Development), which keyword is used to describe the expected outcome?",
+    "Options": [
+      "Given",
+      "When",
+      "Then",
+      "And"
+    ],
+    "CorrectAnswerIndex": 2
+  },
+  {
+    "QuestionText": "What does CI/CD stand for?",
+    "Options": [
+      "Continuous Integration / Continuous Delivery",
+      "Code Inspection / Code Deployment",
+      "Continuous Inspection / Continuous Development",
+      "Code Integration / Code Delivery"
+    ],
+    "CorrectAnswerIndex": 0
+  },
+  {
+    "QuestionText": "Which HTTP status code indicates a successful request?",
+    "Options": [
+      "404",
+      "500",
+      "200",
+      "301"
+    ],
+    "CorrectAnswerIndex": 2
+  },
+  {
+    "QuestionText": "What is a 'defect' in software testing terminology?",
+    "Options": [
+      "A missing feature request",
+      "A deviation from expected behavior",
+      "A performance bottleneck",
+      "An incomplete test case"
+    ],
+    "CorrectAnswerIndex": 1
+  },
+  {
+    "QuestionText": "Which tool is commonly used for API testing?",
+    "Options": [
+      "Selenium",
+      "JMeter",
+      "Postman",
+      "TestNG"
+    ],
+    "CorrectAnswerIndex": 2
+  },
+  {
+    "QuestionText": "In Agile methodology, what is a 'Sprint'?",
+    "Options": [
+      "A daily stand-up meeting",
+      "A fixed-length iteration of work",
+      "A type of regression test",
+      "A release deployment step"
+    ],
+    "CorrectAnswerIndex": 1
+  },
+  {
+    "QuestionText": "What does SQL stand for?",
+    "Options": [
+      "Structured Query Language",
+      "Simple Query Logic",
+      "System Query Layer",
+      "Standard Queue Language"
+    ],
+    "CorrectAnswerIndex": 0
+  }
+]
