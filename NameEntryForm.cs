@@ -237,7 +237,8 @@ namespace QuizApp
             var quizForm     = new QuizForm(questions, fullName, _quizTitle, _scoreFilePath);
             quizForm.Show();
             Hide();
-            quizForm.FormClosed += (s2, e2) => Close();
+            // Do NOT close NameEntryForm when QuizForm closes - QuizForm hides itself
+            // and ResultForm handles Application.Exit() when user is done.
         }
 
         private void ShowError(string msg)

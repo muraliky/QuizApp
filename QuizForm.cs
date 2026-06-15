@@ -465,9 +465,11 @@ namespace QuizApp
             }
             catch (Exception ex) { err = ex.Message; }
 
-            new ResultForm(_questions, _userAnswers, _fullName, score,
-                           _quizTitle, ok, err).Show();
-            Close();
+            var rf = new ResultForm(_questions, _userAnswers, _fullName, score,
+                                    _quizTitle, ok, err);
+            rf.FormClosed += (s, e) => Application.Exit();
+            rf.Show();
+            Hide();
         }
 
         // Paint a light border around panels
