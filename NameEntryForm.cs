@@ -232,8 +232,23 @@ namespace QuizApp
                 return;
             }
 
+            string fullName = $"{fn} {ln}";
+
+            // ── Duplicate check ────────────────────────────────────────
+            try
+            {
+                if (ExcelScoreWriter.NameExists(_scoreFilePath, fullName))
+                {
+                    ShowError($"{fullName} has already submitted. Contact the organiser.");
+                    return;
+                }
+            }
+            catch
+            {
+                // If the file doesn't exist yet or can't be read, allow through
+            }
+
             lblError.Visible = false;
-            string fullName  = $"{fn} {ln}";
             var quizForm     = new QuizForm(questions, fullName, _quizTitle, _scoreFilePath);
             quizForm.Show();
             Hide();

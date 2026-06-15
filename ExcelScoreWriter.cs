@@ -104,5 +104,31 @@ namespace QuizApp
             int m = seconds / 60, s = seconds % 60;
             return s == 0 ? $"{m}m" : $"{m}m {s}s";
         }
+
+        /// <summary>
+        /// Returns true if a row with the same full name (case-insensitive) already exists.
+        /// </summary>
+        public static bool NameExists(string filePath, string fullName)
+        {
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            var fileInfo = new FileInfo(filePath);
+            if (!fileInfo.Exists) return false;
+
+            using var package = new ExcelPackage(fileInfo);
+            if (package.Workbook.Worksheets.Count == 0) return false;
+
+            var ws = package.Workbook.Worksheets[0];
+            int lastRow = ws.Dimension?.End.Row ?? 2;
+
+            // Data starts at row 3 (row 1 = title, row 2 = headers)
+            for (int r = 3; r <= lastRow; r++)
+            {
+                var cell = ws.Cells[r, 2].Value?.ToString()?.Trim();
+                if (string.Equals(cell, fullName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
     }
 }
