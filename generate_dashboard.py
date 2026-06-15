@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
 generate_dashboard.py
-Reads QuizScores.xlsx and writes a self-contained leaderboard HTML file
-with all data embedded directly — no JSON file, no server needed.
+Reads QuizScores.xlsx and writes a self-contained leaderboard HTML file.
 
 Usage:
   python generate_dashboard.py
   python generate_dashboard.py --excel "\\\\Server\\Share\\QuizScores.xlsx" --out leaderboard.html
-  python generate_dashboard.py --watch          # regenerate every 10 seconds (live mode)
+  python generate_dashboard.py --watch          # regenerate every 10 seconds
   python generate_dashboard.py --title "June Quiz"
 """
 import sys, argparse, time
@@ -22,7 +21,7 @@ except ImportError:
     import openpyxl
 
 
-# ── Read Excel ────────────────────────────────────────────────────────────────
+# ── Read & rank Excel ─────────────────────────────────────────────────────────
 def read_excel(excel_path: str) -> list[dict]:
     wb   = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
     ws   = wb.active
@@ -47,10 +46,10 @@ def read_excel(excel_path: str) -> list[dict]:
             print(f"  Skipping row: {e}")
     wb.close()
 
-    # Sort: highest score first, then fastest time
+    # Sort: highest score first, then fastest time (Fastest Fingers First)
     entries.sort(key=lambda x: (-x["score"], x["time_sec"]))
 
-    # Assign ranks (ties share a rank)
+    # Assign ranks — ties share a rank
     rank = 1
     for i, e in enumerate(entries):
         if i > 0:
@@ -62,80 +61,109 @@ def read_excel(excel_path: str) -> list[dict]:
     return entries
 
 
-# ── Build HTML rows ───────────────────────────────────────────────────────────
-def esc(s: str) -> str:
+# ── Stats ─────────────────────────────────────────────────────────────────────
+def build_stats(entries: list[dict], total_q: int) -> dict:
+    if not entries:
+        return dict(count="—", top="—", fastest="—", avg="—", full_marks="—")
+
+    count   = len(entries)
+    top_score = entries[0]["score"]
+
+    # Fastest time = lowest time among participants who have the HIGHEST score
+    top_scorers = [e for e in entries if e["score"] == top_score]
+    fastest_e   = min(top_scorers, key=lambda e: e["time_sec"])
+
+    avg         = f"{round(sum(e['pct'] for e in entries) / count, 1)}%"
+    full_marks  = sum(1 for e in entries if e["score"] == total_q)
+
+    return dict(
+        count      = count,
+        top        = f"{top_score}/{total_q}",
+        fastest    = fastest_e["time_disp"],
+        avg        = avg,
+        full_marks = full_marks if full_marks > 0 else "0"
+    )
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def esc(s) -> str:
     return str(s).replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
-def pct_class(pct):
+def pct_class(pct: float) -> str:
     return "pct-green" if pct >= 80 else "pct-amber" if pct >= 60 else "pct-red"
 
-def build_podium(top3: list[dict]) -> str:
-    if not top3:
+
+# ── Top-10 leaderboard cards ──────────────────────────────────────────────────
+def build_top10(entries: list[dict]) -> str:
+    if not entries:
         return '<p class="empty-sub">Waiting for participants…</p>'
-    medals  = ["🥇","🥈","🥉"]
-    # Classic layout: 2nd | 1st | 3rd
-    order = [top3[1], top3[0], top3[2]] if len(top3) >= 3 else \
-            [top3[1], top3[0]]          if len(top3) == 2 else top3
+
+    top10  = entries[:10]
+    medals = {1:"🥇", 2:"🥈", 3:"🥉"}
+
+    # Fastest among top scorers for ⚡ badge
+    top_score   = entries[0]["score"]
+    top_scorers = [e for e in top10 if e["score"] == top_score]
+    fastest_sec = min(e["time_sec"] for e in top_scorers)
+
     cards = []
-    for e in order:
-        r     = e["rank"]
-        cls   = f"rank-{r}" if r <= 3 else "rank-n"
-        medal = medals[r-1] if r <= 3 else f"#{r}"
+    for e in top10:
+        r       = e["rank"]
+        medal   = medals.get(r, f"#{r}")
+        is_fast = (e["score"] == top_score and e["time_sec"] == fastest_sec
+                   and len(top_scorers) > 1)
+        fast_badge = '<span class="fast-badge">⚡ Fastest</span>' if is_fast else ""
         cards.append(f"""
-        <div class="podium-card {cls}">
-          <span class="medal">{medal}</span>
-          <div class="podium-name" title="{esc(e['name'])}">{esc(e['name'])}</div>
-          <div class="podium-score">{e['score']}/{e['total']}</div>
-          <div class="podium-pct">{e['pct']}%</div>
-          <div class="podium-time">⏱ {esc(e['time_disp'])}</div>
-        </div>""")
+      <div class="lb-card rank-{min(r,4)}">
+        <div class="lb-medal">{medal}</div>
+        <div class="lb-rank">#{r}</div>
+        <div class="lb-name" title="{esc(e['name'])}">{esc(e['name'])}</div>
+        <div class="lb-score">{e['score']}<span class="lb-total">/{e['total']}</span></div>
+        <div class="lb-pct"><span class="pct-pill {pct_class(e['pct'])}">{e['pct']}%</span></div>
+        <div class="lb-time">⏱ {esc(e['time_disp'])}{fast_badge}</div>
+      </div>""")
+
     return "\n".join(cards)
 
-def build_rows(entries: list[dict]) -> str:
-    if not entries:
+
+# ── Remaining table (rank 11+) ────────────────────────────────────────────────
+def build_rest_rows(entries: list[dict]) -> str:
+    rest = entries[10:]
+    if not rest:
         return ""
-    min_time = min(e["time_sec"] for e in entries)
+
+    # ⚡ mark: fastest among highest scorers overall
+    top_score   = entries[0]["score"]
+    top_scorers = [e for e in entries if e["score"] == top_score]
+    fastest_sec = min(e["time_sec"] for e in top_scorers) if len(top_scorers) > 1 else -1
+
     rows = []
-    for e in entries:
-        r       = e["rank"]
-        rbadge  = f"r{r}" if r <= 3 else "rn"
-        row_cls = "row-1st" if r == 1 else ""
-        bar_pct = round(e["score"] / e["total"] * 100, 1) if e["total"] else 0
-        pc      = pct_class(e["pct"])
-        fastest = e["time_sec"] == min_time and len(entries) > 1
-        t_cls   = "time-fast" if fastest else "time-cell"
-        bolt    = " ⚡" if fastest else ""
+    for e in rest:
+        r      = e["rank"]
+        pc     = pct_class(e["pct"])
+        bar_w  = round(e["score"] / e["total"] * 100, 1) if e["total"] else 0
+        is_fast= (e["score"] == top_score and e["time_sec"] == fastest_sec)
+        t_cls  = "time-fast" if is_fast else "time-cell"
+        bolt   = " ⚡" if is_fast else ""
         rows.append(f"""
-      <tr class="{row_cls}">
-        <td class="center"><span class="rank-badge {rbadge}">{r}</span></td>
+      <tr>
+        <td class="center"><span class="rank-badge rn">{r}</span></td>
         <td class="name-cell">{esc(e['name'])}</td>
         <td>
           <div class="score-bar-wrap">
-            <div class="score-bar"><div class="score-bar-fill" style="width:{bar_pct}%"></div></div>
+            <div class="score-bar"><div class="score-bar-fill" style="width:{bar_w}%"></div></div>
             <span class="score-num">{e['score']}/{e['total']}</span>
           </div>
         </td>
         <td class="center"><span class="pct-pill {pc}">{e['pct']}%</span></td>
         <td class="center {t_cls}">{esc(e['time_disp'])}{bolt}</td>
-        <td class="center" style="font-size:11px;color:var(--muted)">{esc(e['submitted'])}</td>
+        <td class="center muted-sm">{esc(e['submitted'])}</td>
       </tr>""")
     return "\n".join(rows)
 
-def build_stats(entries, total_q) -> dict:
-    if not entries:
-        return dict(count="—", top="—", fastest="—", avg="—", full="—")
-    count   = len(entries)
-    top     = f"{entries[0]['score']}/{total_q}"
-    fast_e  = min(entries, key=lambda e: e["time_sec"])
-    avg     = f"{round(sum(e['pct'] for e in entries)/count,1)}%"
-    full    = sum(1 for e in entries if e["score"] == total_q)
-    return dict(count=count, top=top,
-                fastest=fast_e["time_disp"], avg=avg,
-                full=full if full > 0 else "0")
-
 
 # ── HTML template ─────────────────────────────────────────────────────────────
-HTML = """<!DOCTYPE html>
+HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
@@ -145,7 +173,7 @@ HTML = """<!DOCTYPE html>
     *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
     :root{{
       --blue:#2962AC;--blue-dk:#1A3F7A;--blue-lt:#E8F0FB;
-      --gold:#F5A623;--silver:#9CA3AF;--bronze:#CD7F32;
+      --gold:#E8940A;--silver:#8A9BB0;--bronze:#B5712A;
       --green:#1A7A3F;--green-lt:#E4F5EB;
       --amber:#9A5500;--amber-lt:#FEF3E2;
       --red:#B91C1C;--red-lt:#FEE8E6;
@@ -156,7 +184,7 @@ HTML = """<!DOCTYPE html>
     }}
     body{{font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}}
 
-    /* Header */
+    /* ── Header ── */
     .header{{background:linear-gradient(135deg,var(--blue-dk),var(--blue));color:#fff;
              padding:0 32px;height:72px;display:flex;align-items:center;
              justify-content:space-between;box-shadow:0 2px 16px rgba(0,0,0,.18);
@@ -169,12 +197,11 @@ HTML = """<!DOCTYPE html>
     .live-badge{{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);
                  border:1px solid rgba(255,255,255,.25);border-radius:20px;
                  padding:5px 14px;font-size:12px;font-weight:600;letter-spacing:.5px}}
-    .live-dot{{width:8px;height:8px;background:#4ADE80;border-radius:50%;
-               animation:pulse 1.4s infinite}}
+    .live-dot{{width:8px;height:8px;background:#4ADE80;border-radius:50%;animation:pulse 1.4s infinite}}
     @keyframes pulse{{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:.5;transform:scale(.75)}}}}
     .updated-txt{{font-size:11px;color:rgba(255,255,255,.6)}}
 
-    /* Stats */
+    /* ── Stats ── */
     .stats-row{{display:flex;gap:14px;padding:20px 32px 0;flex-wrap:wrap}}
     .stat-card{{background:var(--white);border-radius:var(--radius);border:1px solid var(--border);
                 box-shadow:var(--shadow);padding:16px 22px;flex:1;min-width:120px}}
@@ -182,68 +209,75 @@ HTML = """<!DOCTYPE html>
     .stat-label{{font-size:11px;color:var(--muted);text-transform:uppercase;
                  letter-spacing:.6px;font-weight:600;margin-top:3px}}
 
-    /* Podium */
+    /* ── Section header ── */
     .section{{padding:20px 32px 0}}
-    .section-title{{font-size:13px;font-weight:700;color:var(--muted);
-                    text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;
-                    display:flex;align-items:center;gap:8px}}
+    .section-title{{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.8px;margin-bottom:16px;display:flex;align-items:center;gap:8px}}
     .section-title::after{{content:"";flex:1;height:1px;background:var(--border)}}
-    .podium{{display:flex;justify-content:center;align-items:flex-end;gap:14px;margin-bottom:4px}}
-    .podium-card{{background:var(--white);border:2px solid var(--border);
-                  border-radius:var(--radius);padding:18px 16px 14px;
-                  text-align:center;flex:1;max-width:210px;
-                  box-shadow:var(--shadow);transition:transform .2s}}
-    .podium-card:hover{{transform:translateY(-3px)}}
-    .podium-card.rank-1{{border-color:var(--gold);box-shadow:0 4px 20px rgba(245,166,35,.22);padding-top:26px}}
-    .podium-card.rank-2{{border-color:var(--silver)}}
-    .podium-card.rank-3{{border-color:var(--bronze)}}
-    .medal{{font-size:32px;display:block;margin-bottom:6px}}
-    .podium-name{{font-size:14px;font-weight:700;white-space:nowrap;
-                  overflow:hidden;text-overflow:ellipsis}}
-    .podium-score{{font-size:24px;font-weight:800;margin:4px 0}}
-    .rank-1 .podium-score{{color:var(--gold)}}
-    .rank-2 .podium-score{{color:var(--silver)}}
-    .rank-3 .podium-score{{color:var(--bronze)}}
-    .podium-pct{{font-size:12px;font-weight:600;color:var(--muted)}}
-    .podium-time{{font-size:11px;color:var(--muted);background:var(--bg);
-                  border-radius:20px;padding:2px 10px;display:inline-block;margin-top:5px}}
 
-    /* Table */
+    /* ── Top-10 leaderboard cards ── */
+    .lb-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}}
+
+    .lb-card{{background:var(--white);border:2px solid var(--border);border-radius:var(--radius);
+              padding:16px 12px;text-align:center;box-shadow:var(--shadow);
+              transition:transform .2s,box-shadow .2s;position:relative}}
+    .lb-card:hover{{transform:translateY(-3px);box-shadow:0 6px 20px rgba(41,98,172,.15)}}
+
+    /* Rank-specific borders */
+    .lb-card.rank-1{{border-color:var(--gold);box-shadow:0 4px 20px rgba(232,148,10,.20)}}
+    .lb-card.rank-2{{border-color:var(--silver)}}
+    .lb-card.rank-3{{border-color:var(--bronze)}}
+    .lb-card.rank-4{{border-color:#CBD5E0}}
+
+    .lb-medal{{font-size:28px;margin-bottom:2px}}
+    .lb-rank{{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;
+              text-transform:uppercase;margin-bottom:6px}}
+    .lb-name{{font-size:13px;font-weight:700;color:var(--text);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+              margin-bottom:6px}}
+    .lb-score{{font-size:22px;font-weight:800;color:var(--blue);line-height:1}}
+    .lb-total{{font-size:14px;font-weight:500;color:var(--muted)}}
+    .lb-pct{{margin:5px 0}}
+    .lb-time{{font-size:11px;color:var(--muted);margin-top:6px;
+              display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap}}
+    .fast-badge{{display:inline-block;background:#E4F5EB;color:var(--green);
+                 font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px}}
+
+    /* Rank-1 gold score colour */
+    .lb-card.rank-1 .lb-score{{color:var(--gold)}}
+    .lb-card.rank-2 .lb-score{{color:var(--silver)}}
+    .lb-card.rank-3 .lb-score{{color:var(--bronze)}}
+
+    /* ── Rest table (rank 11+) ── */
     .table-section{{padding:20px 32px 32px}}
     .table-wrap{{background:var(--white);border-radius:var(--radius);
                  border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}}
     table{{width:100%;border-collapse:collapse}}
     thead th{{background:var(--blue);color:#fff;font-size:11px;font-weight:700;
-              text-transform:uppercase;letter-spacing:.7px;padding:13px 16px;text-align:left}}
+              text-transform:uppercase;letter-spacing:.7px;padding:12px 16px;text-align:left}}
     thead th.center{{text-align:center}}
     tbody tr{{border-bottom:1px solid var(--border);transition:background .15s}}
     tbody tr:last-child{{border-bottom:none}}
     tbody tr:hover{{background:var(--blue-lt)}}
-    tbody tr.row-1st{{background:#FFFBEB}}
-    tbody tr.row-1st:hover{{background:#FEF3C7}}
-    td{{padding:12px 16px;font-size:13.5px}}
+    td{{padding:11px 16px;font-size:13px}}
     td.center{{text-align:center}}
     .rank-badge{{display:inline-flex;align-items:center;justify-content:center;
-                 width:28px;height:28px;border-radius:50%;font-weight:800;font-size:13px}}
-    .r1{{background:#FEF3C7;color:#92400E;border:2px solid var(--gold)}}
-    .r2{{background:#F1F5F9;color:#475569;border:2px solid var(--silver)}}
-    .r3{{background:#FEF2E8;color:#7C3D0A;border:2px solid var(--bronze)}}
+                 width:28px;height:28px;border-radius:50%;font-weight:800;font-size:12px}}
     .rn{{background:var(--bg);color:var(--muted);border:1px solid var(--border)}}
     .name-cell{{font-weight:600}}
     .score-bar-wrap{{display:flex;align-items:center;gap:10px}}
-    .score-bar{{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}}
-    .score-bar-fill{{height:100%;border-radius:4px;
-                     background:linear-gradient(90deg,var(--blue),#5B9BF8)}}
-    .score-num{{font-weight:700;color:var(--blue);min-width:38px}}
-    .pct-pill{{display:inline-block;padding:2px 10px;border-radius:20px;
-               font-size:11px;font-weight:700}}
+    .score-bar{{flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden}}
+    .score-bar-fill{{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--blue),#5B9BF8)}}
+    .score-num{{font-weight:700;color:var(--blue);min-width:38px;font-size:13px}}
+    .pct-pill{{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}}
     .pct-green{{background:var(--green-lt);color:var(--green)}}
     .pct-amber{{background:var(--amber-lt);color:var(--amber)}}
     .pct-red{{background:var(--red-lt);color:var(--red)}}
-    .time-cell{{color:var(--muted);font-size:12.5px}}
-    .time-fast{{color:var(--green);font-weight:700}}
+    .time-cell{{color:var(--muted);font-size:12px}}
+    .time-fast{{color:var(--green);font-weight:700;font-size:12px}}
+    .muted-sm{{font-size:11px;color:var(--muted)}}
 
-    /* Empty */
+    /* ── Empty ── */
     .empty{{text-align:center;padding:60px 20px;color:var(--muted)}}
     .empty-icon{{font-size:48px;margin-bottom:12px}}
     .empty-title{{font-size:16px;font-weight:600;margin-bottom:6px;color:var(--text)}}
@@ -251,13 +285,14 @@ HTML = """<!DOCTYPE html>
 
     @media(max-width:700px){{
       .header,.stats-row,.section,.table-section{{padding-left:14px;padding-right:14px}}
-      .podium-card{{max-width:130px;padding:12px 8px}}
+      .lb-grid{{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}}
       td,thead th{{padding:9px 10px;font-size:12px}}
     }}
   </style>
 </head>
 <body>
 
+<!-- Header -->
 <div class="header">
   <div class="h-left">
     <span class="h-icon">🏆</span>
@@ -272,70 +307,77 @@ HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- Stats -->
 <div class="stats-row">
   <div class="stat-card"><div class="stat-value">{s_count}</div><div class="stat-label">Participants</div></div>
   <div class="stat-card"><div class="stat-value">{s_top}</div><div class="stat-label">Top Score</div></div>
   <div class="stat-card"><div class="stat-value">{s_fastest}</div><div class="stat-label">Fastest Time</div></div>
   <div class="stat-card"><div class="stat-value">{s_avg}</div><div class="stat-label">Avg Score</div></div>
-  <div class="stat-card"><div class="stat-value">{s_full}</div><div class="stat-label">Full Marks</div></div>
+  <div class="stat-card"><div class="stat-value">{s_full}</div><div class="stat-label">With Full Marks</div></div>
 </div>
 
+<!-- Top 10 Leaderboard -->
 <div class="section">
-  <div class="section-title">🥇 Top 3</div>
-  <div class="podium">{podium}</div>
+  <div class="section-title">🏆 Leaderboard — Top 10</div>
+  {top10_section}
 </div>
 
-<div class="table-section">
-  <div class="section-title">📋 Full Leaderboard</div>
-  <div class="table-wrap">{table}</div>
-</div>
+<!-- Rank 11+ table -->
+{rest_section}
 
 </body>
 </html>"""
 
-TABLE_FULL = """
+TOP10_WRAP    = '<div class="lb-grid">{cards}</div>'
+TOP10_EMPTY   = '<div class="empty"><div class="empty-icon">📊</div><div class="empty-title">No results yet</div><div class="empty-sub">Run this script once participants have submitted.</div></div>'
+
+REST_WRAP = """<div class="table-section">
+  <div class="section-title">📋 Remaining Participants (Rank 11 onwards)</div>
+  <div class="table-wrap">
     <table>
       <thead>
         <tr>
           <th class="center" style="width:54px">Rank</th>
           <th>Name</th>
-          <th style="min-width:180px">Score</th>
+          <th style="min-width:160px">Score</th>
           <th class="center">Percentage</th>
           <th class="center">Time Taken</th>
           <th class="center">Submitted At</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
-    </table>"""
-
-TABLE_EMPTY = """
-    <div class="empty">
-      <div class="empty-icon">📊</div>
-      <div class="empty-title">No results yet</div>
-      <div class="empty-sub">Run this script again once participants have submitted.</div>
-    </div>"""
+    </table>
+  </div>
+</div>"""
 
 
 # ── Generate ──────────────────────────────────────────────────────────────────
 def generate(excel_path: str, out_path: str, title: str):
-    entries  = read_excel(excel_path)
-    total_q  = entries[0]["total"] if entries else 0
-    top3     = entries[:3]
-    stats    = build_stats(entries, total_q)
+    entries   = read_excel(excel_path)
+    total_q   = entries[0]["total"] if entries else 0
+    stats     = build_stats(entries, total_q)
     generated = datetime.now().strftime("%d-%b-%Y %H:%M:%S")
 
-    table_html = TABLE_FULL.format(rows=build_rows(entries)) if entries else TABLE_EMPTY
+    # Top-10 section
+    if entries:
+        top10_section = TOP10_WRAP.format(cards=build_top10(entries))
+    else:
+        top10_section = TOP10_EMPTY
+
+    # Rest section (rank 11+) — only shown if more than 10 entries
+    rest_rows = build_rest_rows(entries)
+    rest_section = REST_WRAP.format(rows=rest_rows) if rest_rows else ""
 
     html = HTML.format(
-        title     = esc(title),
-        generated = generated,
-        s_count   = stats["count"],
-        s_top     = stats["top"],
-        s_fastest = stats["fastest"],
-        s_avg     = stats["avg"],
-        s_full    = stats["full"],
-        podium    = build_podium(top3),
-        table     = table_html,
+        title         = esc(title),
+        generated     = generated,
+        s_count       = stats["count"],
+        s_top         = stats["top"],
+        s_fastest     = stats["fastest"],
+        s_avg         = stats["avg"],
+        s_full        = stats["full_marks"],
+        top10_section = top10_section,
+        rest_section  = rest_section,
     )
 
     Path(out_path).write_text(html, encoding="utf-8")
@@ -345,18 +387,15 @@ def generate(excel_path: str, out_path: str, title: str):
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Generate Quiz Leaderboard HTML from Excel")
-    p.add_argument("--excel", default="../QuizScores.xlsx",     help="Path to QuizScores.xlsx")
-    p.add_argument("--out",   default="leaderboard.html",       help="Output HTML file")
-    p.add_argument("--title", default="CATS Team Monthly Quiz", help="Quiz title shown in header")
-    p.add_argument("--watch", action="store_true",
-                   help="Keep regenerating every 10 seconds (use on quiz day with browser open)")
-    p.add_argument("--interval", type=int, default=10,          help="Refresh interval in seconds (default 10)")
+    p.add_argument("--excel",    default="../QuizScores.xlsx",     help="Path to QuizScores.xlsx")
+    p.add_argument("--out",      default="leaderboard.html",       help="Output HTML file")
+    p.add_argument("--title",    default="CATS Team Monthly Quiz", help="Quiz title in header")
+    p.add_argument("--watch",    action="store_true",              help="Regenerate every N seconds")
+    p.add_argument("--interval", type=int, default=10,             help="Refresh interval in seconds")
     args = p.parse_args()
 
     if args.watch:
-        print(f"Watching: {args.excel}")
-        print(f"Output:   {args.out}")
-        print(f"Interval: every {args.interval}s  (Ctrl+C to stop)\n")
+        print(f"Watching: {args.excel}\nOutput:   {args.out}\nInterval: every {args.interval}s  (Ctrl+C to stop)\n")
         while True:
             try:
                 generate(args.excel, args.out, args.title)
